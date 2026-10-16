@@ -1,0 +1,11 @@
+{
+  "status": "loop_detected",
+  "steps_simulated": 28,
+  "settings": {"spacing_empty_cells": 0, "highway_period_steps": 104, "required_consecutive_cycles": 20, "maximum_steps": 20000, "simultaneous_processing": true},
+  "ants": [
+    {"ant": 1, "color": "red", "position_xy": [0,0], "direction_number": 0, "direction_japanese": "上", "highway_active_at_end": false, "highway_cells_marked": 0, "highway_segments": []},
+    {"ant": 2, "color": "blue", "position_xy": [1,0], "direction_number": 0, "direction_japanese": "上", "highway_active_at_end": false, "highway_cells_marked": 0, "highway_segments": []}
+  ],
+  "loop": {"first_seen_step":0,"repeated_at_step":28,"loop_period_steps":28},
+  "statistics": {"black_cells_remaining":0,"highway_cells_marked_union":0,"black_cells_outside_detected_highway":0,"ever_visited_cells":16}
+}
