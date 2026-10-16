@@ -1,0 +1,274 @@
+<!doctype html>
+<html lang="ja">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#10151c">
+  <meta name="description" content="二匹のラングトンのアリが動く様子をブラウザーで観察できるシミュレーションです。">
+  <title>ラングトンのアリ | Langton's Ant</title>
+  <style>
+    :root {
+      color-scheme: dark;
+      font-family: "Segoe UI", "Noto Sans JP", sans-serif;
+      background: #10151c;
+      color: #e8edf2;
+      font-synthesis: none;
+    }
+    * { box-sizing: border-box; }
+    body { margin: 0; min-width: 320px; }
+    main { width: min(100% - 32px, 960px); margin: 0 auto; padding: 38px 0 28px; }
+    header { margin-bottom: 22px; }
+    h1 { margin: 0 0 8px; font-size: clamp(1.6rem, 5vw, 2.25rem); }
+    header p, .rules { color: #aeb9c5; line-height: 1.7; }
+    header p { margin: 0; }
+    .panel {
+      padding: 16px;
+      border: 1px solid #303a46;
+      border-radius: 14px;
+      background: #171e27;
+      box-shadow: 0 18px 50px #0004;
+    }
+    .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin-bottom: 14px; }
+    button, select {
+      min-height: 42px;
+      padding: 8px 14px;
+      border: 1px solid #465363;
+      border-radius: 9px;
+      background: #222c38;
+      color: #f4f7fa;
+      font: inherit;
+    }
+    button { cursor: pointer; }
+    button:hover, select:hover { background: #2c3948; }
+    button:focus-visible, select:focus-visible { outline: 3px solid #82b7ff; outline-offset: 2px; }
+    #toggle { border-color: #40936b; background: #17613e; }
+    #toggle:hover { background: #20784f; }
+    .speed-control { display: flex; align-items: center; gap: 8px; margin-left: auto; color: #c5ced8; }
+    .stats { display: flex; flex-wrap: wrap; gap: 10px 24px; margin: 0 0 12px; color: #c5ced8; }
+    .stats strong { color: #fff; font-variant-numeric: tabular-nums; }
+    .legend { display: flex; flex-wrap: wrap; gap: 16px; margin-bottom: 10px; color: #c5ced8; font-size: .92rem; }
+    .dot { display: inline-block; width: 11px; height: 11px; margin-right: 6px; border-radius: 50%; vertical-align: -1px; }
+    .red { background: #ff626b; }
+    .blue { background: #58a6ff; }
+    .black { display: inline-block; width: 11px; height: 11px; margin-right: 6px; background: #050608; vertical-align: -1px; }
+    canvas {
+      display: block;
+      width: 100%;
+      height: min(64vh, 520px);
+      min-height: 300px;
+      border: 1px solid #394553;
+      border-radius: 9px;
+      background: #f0eee6;
+    }
+    .rules { margin: 16px 2px 0; font-size: .94rem; }
+    .rules strong { color: #e8edf2; }
+    @media (max-width: 560px) {
+      main { width: min(100% - 20px, 960px); padding-top: 24px; }
+      .panel { padding: 12px; }
+      .speed-control { width: 100%; margin-left: 0; }
+      canvas { min-height: 340px; height: 55vh; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { scroll-behavior: auto !important; }
+    }
+  </style>
+</head>
+<body>
+  <main>
+    <header>
+      <h1>ラングトンのアリ</h1>
+      <p>単純なルールから生まれるアリの軌跡を、ブラウザー上で観察してみましょう。</p>
+    </header>
+    <section class="panel" aria-label="ラングトンのアリ シミュレーション">
+      <div class="toolbar">
+        <button id="toggle" type="button">▶ スタート</button>
+        <button id="step" type="button">1歩進む</button>
+        <button id="reset" type="button">リセット</button>
+        <label class="speed-control" for="speed">
+          速さ
+          <select id="speed">
+            <option value="1">ゆっくり</option>
+            <option value="4" selected>ふつう</option>
+            <option value="16">速い</option>
+            <option value="64">とても速い</option>
+          </select>
+        </label>
+      </div>
+      <div class="stats" aria-live="polite">
+        <span>歩数: <strong id="steps">0</strong></span>
+        <span>黒マス: <strong id="black-count">0</strong></span>
+        <span>状態: <strong id="status">停止中</strong></span>
+      </div>
+      <div class="legend" aria-label="凡例">
+        <span><i class="dot red"></i>アリ1</span>
+        <span><i class="dot blue"></i>アリ2</span>
+        <span><i class="black"></i>黒マス</span>
+      </div>
+      <canvas id="board" aria-label="アリとマス目のシミュレーション画面"></canvas>
+    </section>
+    <p class="rules"><strong>ルール:</strong> 白マスでは黒く塗って右へ、黒マスでは白く戻して左へ向きを変え、1マス進みます。二匹のアリは同時に動きます。</p>
+  </main>
+  <script>
+    (() => {
+      const canvas = document.getElementById("board");
+      const context = canvas.getContext("2d");
+      if (!context) {
+        document.querySelector(".stats").textContent = "このブラウザーではシミュレーション画面を表示できません。";
+        return;
+      }
+
+      const stepDisplay = document.getElementById("steps");
+      const blackDisplay = document.getElementById("black-count");
+      const statusDisplay = document.getElementById("status");
+      const toggleButton = document.getElementById("toggle");
+      const speedSelect = document.getElementById("speed");
+      const directions = [[0, -1], [1, 0], [0, 1], [-1, 0]];
+      const colors = ["#e54855", "#2384e8"];
+      let ants;
+      let blackCells;
+      let steps;
+      let running = false;
+      let stepsPerFrame = Number(speedSelect.value);
+
+      function reset() {
+        ants = [
+          { x: 0, y: 0, direction: 0 },
+          { x: 1, y: 0, direction: 0 }
+        ];
+        blackCells = new Set();
+        steps = 0;
+        setRunning(false);
+        update();
+      }
+
+      function setRunning(value) {
+        running = value;
+        toggleButton.textContent = running ? "❚❚ 一時停止" : "▶ スタート";
+        statusDisplay.textContent = running ? "実行中" : "停止中";
+      }
+
+      function cellKey(x, y) {
+        return `${x},${y}`;
+      }
+
+      function simulateStep() {
+        const changes = new Map();
+        for (const ant of ants) {
+          const key = cellKey(ant.x, ant.y);
+          const isBlack = blackCells.has(key);
+          changes.set(key, !isBlack);
+          ant.direction = (ant.direction + (isBlack ? 3 : 1)) % 4;
+        }
+        for (const [key, becomesBlack] of changes) {
+          if (becomesBlack) blackCells.add(key);
+          else blackCells.delete(key);
+        }
+        for (const ant of ants) {
+          ant.x += directions[ant.direction][0];
+          ant.y += directions[ant.direction][1];
+        }
+        steps += 1;
+      }
+
+      function resizeCanvas() {
+        const bounds = canvas.getBoundingClientRect();
+        const pixelRatio = window.devicePixelRatio || 1;
+        canvas.width = Math.round(bounds.width * pixelRatio);
+        canvas.height = Math.round(bounds.height * pixelRatio);
+        context.setTransform(pixelRatio, 0, 0, pixelRatio, 0, 0);
+        draw();
+      }
+
+      function drawAnt(ant, centerX, centerY, cellSize, color, offset) {
+        const x = (ant.x - centerX) * cellSize + canvas.clientWidth / 2 + offset;
+        const y = (ant.y - centerY) * cellSize + canvas.clientHeight / 2;
+        context.save();
+        context.translate(x, y);
+        context.fillStyle = color;
+        context.beginPath();
+        context.arc(0, 0, cellSize * 0.38, 0, Math.PI * 2);
+        context.fill();
+        context.rotate(ant.direction * Math.PI / 2 - Math.PI / 2);
+        context.fillStyle = "#fff";
+        context.beginPath();
+        context.moveTo(0, -cellSize * 0.23);
+        context.lineTo(cellSize * 0.15, cellSize * 0.14);
+        context.lineTo(-cellSize * 0.15, cellSize * 0.14);
+        context.closePath();
+        context.fill();
+        context.restore();
+      }
+
+      function draw() {
+        const width = canvas.clientWidth;
+        const height = canvas.clientHeight;
+        if (!width || !height) return;
+        context.clearRect(0, 0, width, height);
+        const cellSize = Math.max(8, Math.min(22, width / 42));
+        const centerX = Math.round((ants[0].x + ants[1].x) / 2);
+        const centerY = Math.round((ants[0].y + ants[1].y) / 2);
+        const columns = Math.ceil(width / cellSize / 2) + 1;
+        const rows = Math.ceil(height / cellSize / 2) + 1;
+
+        context.fillStyle = "#080a0d";
+        for (const key of blackCells) {
+          const comma = key.indexOf(",");
+          const x = Number(key.slice(0, comma));
+          const y = Number(key.slice(comma + 1));
+          const screenX = (x - centerX) * cellSize + width / 2;
+          const screenY = (y - centerY) * cellSize + height / 2;
+          if (Math.abs(x - centerX) <= columns && Math.abs(y - centerY) <= rows) {
+            context.fillRect(screenX - cellSize / 2 + 0.5, screenY - cellSize / 2 + 0.5, cellSize - 1, cellSize - 1);
+          }
+        }
+
+        context.strokeStyle = "#d8d5cc";
+        context.lineWidth = 1;
+        context.beginPath();
+        for (let x = ((width / 2 - centerX * cellSize) % cellSize + cellSize) % cellSize; x < width; x += cellSize) {
+          context.moveTo(x, 0);
+          context.lineTo(x, height);
+        }
+        for (let y = ((height / 2 - centerY * cellSize) % cellSize + cellSize) % cellSize; y < height; y += cellSize) {
+          context.moveTo(0, y);
+          context.lineTo(width, y);
+        }
+        context.stroke();
+
+        const sameCell = ants[0].x === ants[1].x && ants[0].y === ants[1].y;
+        drawAnt(ants[0], centerX, centerY, cellSize, colors[0], sameCell ? -cellSize * 0.16 : 0);
+        drawAnt(ants[1], centerX, centerY, cellSize, colors[1], sameCell ? cellSize * 0.16 : 0);
+      }
+
+      function update() {
+        stepDisplay.textContent = steps.toLocaleString("ja-JP");
+        blackDisplay.textContent = blackCells.size.toLocaleString("ja-JP");
+        draw();
+      }
+
+      function animate() {
+        if (running) {
+          for (let i = 0; i < stepsPerFrame; i += 1) simulateStep();
+          update();
+        }
+        window.requestAnimationFrame(animate);
+      }
+
+      toggleButton.addEventListener("click", () => setRunning(!running));
+      document.getElementById("step").addEventListener("click", () => {
+        setRunning(false);
+        simulateStep();
+        update();
+      });
+      document.getElementById("reset").addEventListener("click", reset);
+      speedSelect.addEventListener("change", () => {
+        stepsPerFrame = Number(speedSelect.value);
+      });
+      window.addEventListener("resize", resizeCanvas);
+      reset();
+      resizeCanvas();
+      window.requestAnimationFrame(animate);
+    })();
+  </script>
+</body>
+</html>
